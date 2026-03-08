@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import {
   LineChart,
   Line,
@@ -8,6 +9,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+
+const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
 type Device = {
   id: number;
@@ -55,10 +58,40 @@ const mockEnergyData = [
   { time: '23:59', watts: 150 },
 ];
 
+const savedAutomations = [
+  { id: 1, name: 'Нощен режим', active: true, description: 'Изгася всички лампи в 23:00' },
+  { id: 2, name: 'Добро утро', active: false, description: 'Включва лампа хол в 7:30' },
+  { id: 3, name: 'Филм режим', active: true, description: 'Намалява осветлението при пускане на TV' },
+];
+
+const defaultCode = `// Open Smart Hub — Automation Engine
+// Пиши автоматизации с TypeScript
+
+hub.on('time', '23:00', async () => {
+  // Изгаси всички лампи в 23:00
+  const lights = hub.getDevicesByType('light');
+  for (const light of lights) {
+    await light.turnOff();
+  }
+  hub.notify('🌙 Нощен режим активиран');
+});
+
+hub.on('device_state', 'Контакт TV', async (state) => {
+  // Когато TV се включи, намали лампите
+  if (state === 'ON') {
+    await hub.getDevice('Лампа хол').setBrightness(30);
+  } else {
+    await hub.getDevice('Лампа хол').setBrightness(100);
+  }
+});
+`;
+
 export default function Dashboard() {
   const [activeNav, setActiveNav] = useState('home');
   const [activeRoom, setActiveRoom] = useState('Хол');
   const [devices, setDevices] = useState<DevicesMap>(initialDevices);
+  const [code, setCode] = useState(defaultCode);
+  const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
 
   const toggleDevice = (room: string, id: number) => {
     setDevices((prev) => ({
@@ -74,6 +107,16 @@ export default function Dashboard() {
   const totalPower = Object.values(devices)
     .flat()
     .reduce((acc, d) => acc + d.power, 0);
+
+  const runAutomation = () => {
+    const ts = new Date().toLocaleTimeString('bg-BG');
+    setConsoleOutput((prev) => [
+      ...prev,
+      `[${ts}] ▶ Стартиране на автоматизацията...`,
+      `[${ts}] ✓ Синтаксисът е валиден`,
+      `[${ts}] ✓ Автоматизацията е запазена и активна`,
+    ]);
+  };
 
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100 overflow-hidden">
@@ -120,6 +163,7 @@ export default function Dashboard() {
         </header>
 
         <div className="flex-1 overflow-auto p-8">
+
           {/* HOME TAB */}
           {activeNav === 'home' && (
             <>
@@ -197,8 +241,81 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* AUTOMATIONS TAB */}
+          {activeNav === 'automations' && (
+            <div className="flex gap-6 h-full" style={{ minHeight: '600px' }}>
+              {/* Left: saved automations list */}
+              <div className="w-64 flex-shrink-0 space-y-3">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-sm text-gray-400">Запазени</span>
+                  <button className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg transition-colors">
+                    + Нова
+                  </button>
+                </div>
+                {savedAutomations.map((auto) => (
+                  <div
+                    key={auto.id}
+                    className="bg-gray-900 border border-gray-800 p-4 rounded-xl cursor-pointer hover:border-gray-700 transition-colors"
+                  >
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-sm font-medium text-gray-200">{auto.name}</span>
+                      <span className={`text-xs font-mono ${auto.active ? 'text-green-400' : 'text-gray-600'}`}>
+                        {auto.active ? '● ON' : '○ OFF'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">{auto.description}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Right: editor + console */}
+              <div className="flex-1 flex flex-col gap-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-400 font-mono">automation.ts</span>
+                  <button
+                    onClick={runAutomation}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-lg transition-colors font-medium"
+                  >
+                    ▶ Стартирай
+                  </button>
+                </div>
+
+                {/* Monaco Editor */}
+                <div className="flex-1 rounded-xl overflow-hidden border border-gray-800" style={{ minHeight: '320px' }}>
+                  <MonacoEditor
+                    height="320px"
+                    defaultLanguage="typescript"
+                    theme="vs-dark"
+                    value={code}
+                    onChange={(val) => setCode(val ?? '')}
+                    options={{
+                      fontSize: 13,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      lineNumbers: 'on',
+                      padding: { top: 12 },
+                    }}
+                  />
+                </div>
+
+                {/* Console output */}
+                <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 h-32 overflow-auto font-mono text-xs">
+                  {consoleOutput.length === 0 ? (
+                    <span className="text-gray-600">// Конзолата е празна. Натисни ▶ Стартирай.</span>
+                  ) : (
+                    consoleOutput.map((line, i) => (
+                      <div key={i} className={line.includes('✓') ? 'text-green-400' : 'text-gray-400'}>
+                        {line}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* OTHER TABS */}
-          {activeNav !== 'home' && activeNav !== 'energy' && (
+          {activeNav !== 'home' && activeNav !== 'energy' && activeNav !== 'automations' && (
             <div className="flex h-full items-center justify-center text-gray-600 font-mono text-sm">
               [ {navItems.find((n) => n.id === activeNav)?.label} — coming soon ]
             </div>
