@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import {
   LineChart,
@@ -22,22 +22,6 @@ type Device = {
 
 type DevicesMap = {
   [room: string]: Device[];
-};
-
-const initialDevices: DevicesMap = {
-  'Хол': [
-    { id: 1, name: 'Лампа хол', type: 'light', state: true, power: 12 },
-    { id: 2, name: 'Контакт TV', type: 'plug', state: true, power: 87 },
-    { id: 3, name: 'Лампа ъгъл', type: 'light', state: false, power: 0 },
-  ],
-  'Спалня': [
-    { id: 4, name: 'Лампа спалня', type: 'light', state: false, power: 0 },
-    { id: 5, name: 'Контакт зарядно', type: 'plug', state: true, power: 18 },
-  ],
-  'Кухня': [
-    { id: 6, name: 'Лампа кухня', type: 'light', state: true, power: 9 },
-    { id: 7, name: 'Контакт кафемашина', type: 'plug', state: false, power: 0 },
-  ],
 };
 
 const navItems = [
@@ -89,24 +73,40 @@ hub.on('device_state', 'Контакт TV', async (state) => {
 export default function Dashboard() {
   const [activeNav, setActiveNav] = useState('home');
   const [activeRoom, setActiveRoom] = useState('Хол');
-  const [devices, setDevices] = useState<DevicesMap>(initialDevices);
+  const [devices, setDevices] = useState<DevicesMap | null>(null);
   const [code, setCode] = useState(defaultCode);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
+  const [apiOnline, setApiOnline] = useState(false);
 
-  const toggleDevice = (room: string, id: number) => {
-    setDevices((prev) => ({
-      ...prev,
-      [room]: prev[room].map((d) =>
-        d.id === id
-          ? { ...d, state: !d.state, power: !d.state ? (d.type === 'light' ? 12 : 45) : 0 }
-          : d
-      ),
-    }));
+  // Fetch devices from actual backend API on load
+  useEffect(() => {
+    fetch('http://localhost:3001/api/devices')
+      .then(res => res.json())
+      .then(data => {
+        setDevices(data);
+        setApiOnline(true);
+      })
+      .catch(err => {
+        console.error('Failed to fetch devices:', err);
+        setApiOnline(false);
+      });
+  }, []);
+
+  const toggleDevice = async (room: string, id: number) => {
+    try {
+      // API call to toggle device
+      const res = await fetch(`http://localhost:3001/api/devices/${encodeURIComponent(room)}/${id}/toggle`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDevices(data.devices); // Update state with response from backend
+      }
+    } catch (err) {
+      console.error('API toggle failed:', err);
+      setApiOnline(false);
+    }
   };
-
-  const totalPower = Object.values(devices)
-    .flat()
-    .reduce((acc, d) => acc + d.power, 0);
 
   const runAutomation = () => {
     const ts = new Date().toLocaleTimeString('bg-BG');
@@ -117,6 +117,19 @@ export default function Dashboard() {
       `[${ts}] ✓ Автоматизацията е запазена и активна`,
     ]);
   };
+
+  if (!devices) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-950 text-gray-400 font-mono">
+        Свързване с Backend API... 
+        {!apiOnline && <span className="ml-2 text-red-400">(Увери се, че backend-а работи на порт 3001!)</span>}
+      </div>
+    );
+  }
+
+  const totalPower = Object.values(devices)
+    .flat()
+    .reduce((acc, d) => acc + d.power, 0);
 
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100 overflow-hidden">
@@ -143,8 +156,8 @@ export default function Dashboard() {
         </nav>
         <div className="p-5 border-t border-gray-800">
           <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            <span>System Online</span>
+            <span className={`w-2 h-2 rounded-full ${apiOnline ? 'bg-green-400 animate-pulse' : 'bg-red-500'}`} />
+            <span>{apiOnline ? 'System Online' : 'System Offline'}</span>
           </div>
         </div>
       </aside>
@@ -158,7 +171,9 @@ export default function Dashboard() {
           <div className="flex items-center gap-4 text-sm font-mono text-gray-400">
             <span>{Object.values(devices).flat().filter((d) => d.state).length} активни</span>
             <span className="text-gray-600">|</span>
-            <span className="text-green-400">● API Online</span>
+            <span className={apiOnline ? 'text-green-400' : 'text-red-500'}>
+              {apiOnline ? '● API Online' : '○ API Offline'}
+            </span>
           </div>
         </header>
 
@@ -183,7 +198,7 @@ export default function Dashboard() {
                 ))}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {devices[activeRoom].map((device) => (
+                {devices[activeRoom]?.map((device) => (
                   <button
                     key={device.id}
                     onClick={() => toggleDevice(activeRoom, device.id)}
