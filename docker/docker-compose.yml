@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # MQTT Broker (Mosquitto)
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: smarthub-mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"   # MQTT
+      - "9001:9001"   # WebSocket
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+
+  # Time-Series Database (InfluxDB)
+  influxdb:
+    image: influxdb:2.7
+    container_name: smarthub-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=smarthub2026
+      - DOCKER_INFLUXDB_INIT_ORG=smarthub
+      - DOCKER_INFLUXDB_INIT_BUCKET=energy
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=smarthub-super-secret-token
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+
+  # PostgreSQL (Device config & automations)
+  postgres:
+    image: postgres:16-alpine
+    container_name: smarthub-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=smarthub
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=smarthub2026
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  influxdb-data:
+  postgres-data:
