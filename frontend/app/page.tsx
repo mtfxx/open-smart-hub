@@ -77,8 +77,10 @@ export default function Dashboard() {
   const [code, setCode] = useState(defaultCode);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [apiOnline, setApiOnline] = useState(false);
+  
+  // API Tab State
+  const [apiResponse, setApiResponse] = useState<string>('// Избери endpoint и натисни "Test", за да видиш отговора тук...');
 
-  // Fetch devices from actual backend API on load
   useEffect(() => {
     fetch('http://localhost:3001/api/devices')
       .then(res => res.json())
@@ -94,13 +96,12 @@ export default function Dashboard() {
 
   const toggleDevice = async (room: string, id: number) => {
     try {
-      // API call to toggle device
       const res = await fetch(`http://localhost:3001/api/devices/${encodeURIComponent(room)}/${id}/toggle`, {
         method: 'POST'
       });
       const data = await res.json();
       if (data.success) {
-        setDevices(data.devices); // Update state with response from backend
+        setDevices(data.devices);
       }
     } catch (err) {
       console.error('API toggle failed:', err);
@@ -116,6 +117,19 @@ export default function Dashboard() {
       `[${ts}] ✓ Синтаксисът е валиден`,
       `[${ts}] ✓ Автоматизацията е запазена и активна`,
     ]);
+  };
+
+  const testApi = async (endpoint: string, method: string) => {
+    try {
+      setApiResponse('// Зареждане...');
+      const start = performance.now();
+      const res = await fetch(`http://localhost:3001${endpoint}`, { method });
+      const data = await res.json();
+      const time = Math.round(performance.now() - start);
+      setApiResponse(`// HTTP ${res.status} OK (${time}ms)\n${JSON.stringify(data, null, 2)}`);
+    } catch (err) {
+      setApiResponse(`// Error: API is unreachable.\n${String(err)}`);
+    }
   };
 
   if (!devices) {
@@ -259,7 +273,6 @@ export default function Dashboard() {
           {/* AUTOMATIONS TAB */}
           {activeNav === 'automations' && (
             <div className="flex gap-6 h-full" style={{ minHeight: '600px' }}>
-              {/* Left: saved automations list */}
               <div className="w-64 flex-shrink-0 space-y-3">
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-sm text-gray-400">Запазени</span>
@@ -283,7 +296,6 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              {/* Right: editor + console */}
               <div className="flex-1 flex flex-col gap-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-400 font-mono">automation.ts</span>
@@ -295,7 +307,6 @@ export default function Dashboard() {
                   </button>
                 </div>
 
-                {/* Monaco Editor */}
                 <div className="flex-1 rounded-xl overflow-hidden border border-gray-800" style={{ minHeight: '320px' }}>
                   <MonacoEditor
                     height="320px"
@@ -313,7 +324,6 @@ export default function Dashboard() {
                   />
                 </div>
 
-                {/* Console output */}
                 <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 h-32 overflow-auto font-mono text-xs">
                   {consoleOutput.length === 0 ? (
                     <span className="text-gray-600">// Конзолата е празна. Натисни ▶ Стартирай.</span>
@@ -329,8 +339,65 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* API TAB */}
+          {activeNav === 'api' && (
+            <div className="flex gap-6 h-full">
+              {/* Left: Endpoints List */}
+              <div className="w-1/3 flex-shrink-0 space-y-4">
+                <h2 className="text-lg font-semibold mb-4 text-gray-200">REST API & Webhooks</h2>
+                <p className="text-sm text-gray-400 mb-6">
+                  Интегрирай Open Smart Hub с други услуги (напр. GitHub Actions) чрез локалното API на порт 3001.
+                </p>
+
+                {/* GET Status */}
+                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">GET</span>
+                      <span className="font-mono text-sm">/api/status</span>
+                    </div>
+                    <button onClick={() => testApi('/api/status', 'GET')} className="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-600 transition-colors">Test</button>
+                  </div>
+                  <div className="p-4 text-xs text-gray-500">Връща статуса на системата.</div>
+                </div>
+
+                {/* GET Devices */}
+                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">GET</span>
+                      <span className="font-mono text-sm">/api/devices</span>
+                    </div>
+                    <button onClick={() => testApi('/api/devices', 'GET')} className="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-600 transition-colors">Test</button>
+                  </div>
+                  <div className="p-4 text-xs text-gray-500">Връща всички стаи и устройства.</div>
+                </div>
+
+                {/* POST Toggle */}
+                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-green-600 text-white text-xs font-bold px-2 py-1 rounded">POST</span>
+                      <span className="font-mono text-sm">/api/devices/:room/:id/toggle</span>
+                    </div>
+                    <button onClick={() => testApi('/api/devices/Хол/1/toggle', 'POST')} className="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-600 transition-colors">Test</button>
+                  </div>
+                  <div className="p-4 text-xs text-gray-500">Превключва лампа/контакт (напр. Хол/1).</div>
+                </div>
+              </div>
+
+              {/* Right: Response Display */}
+              <div className="flex-1 bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col">
+                <div className="text-sm font-mono text-gray-500 mb-2 border-b border-gray-800 pb-2">Response JSON</div>
+                <pre className="font-mono text-sm text-green-400 whitespace-pre-wrap overflow-auto flex-1">
+                  {apiResponse}
+                </pre>
+              </div>
+            </div>
+          )}
+
           {/* OTHER TABS */}
-          {activeNav !== 'home' && activeNav !== 'energy' && activeNav !== 'automations' && (
+          {activeNav !== 'home' && activeNav !== 'energy' && activeNav !== 'automations' && activeNav !== 'api' && (
             <div className="flex h-full items-center justify-center text-gray-600 font-mono text-sm">
               [ {navItems.find((n) => n.id === activeNav)?.label} — coming soon ]
             </div>
