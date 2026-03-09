@@ -396,8 +396,97 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* SETTINGS TAB */}
+          {activeNav === 'settings' && (
+            <div className="space-y-6 max-w-4xl mx-auto">
+              {/* System Status */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div className="p-4 border-b border-gray-800 bg-gray-900/50">
+                  <h3 className="font-medium text-gray-100 flex items-center gap-2">
+                    <span className="text-blue-400">🖥️</span>
+                    System Services (Docker)
+                  </h3>
+                </div>
+                <div className="p-4 divide-y divide-gray-800">
+                  {[
+                    { name: 'Smart Hub Backend', status: 'running', uptime: '4 days', port: '3001' },
+                    { name: 'Mosquitto MQTT', status: 'running', uptime: '4 days', port: '1883' },
+                    { name: 'InfluxDB', status: 'running', uptime: '4 days', port: '8086' },
+                    { name: 'PostgreSQL', status: 'running', uptime: '4 days', port: '5432' }
+                  ].map(service => (
+                    <div key={service.name} className="py-3 first:pt-0 last:pb-0 flex justify-between items-center">
+                      <div>
+                        <div className="font-medium text-gray-200 text-sm">{service.name}</div>
+                        <div className="text-xs text-gray-500 mt-1">Port: {service.port} • Uptime: {service.uptime}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded border border-green-400/20">
+                          {service.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Network & Access */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div className="p-4 border-b border-gray-800 bg-gray-900/50">
+                  <h3 className="font-medium text-gray-100 flex items-center gap-2">
+                    <span className="text-purple-400">🌐</span>
+                    Network & Remote Access
+                  </h3>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="font-medium text-gray-200 text-sm">Tailscale VPN</div>
+                      <div className="text-xs text-gray-500 mt-1">Достъп извън домашната мрежа</div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <code className="text-xs bg-gray-950 px-2 py-1 rounded text-gray-300 font-mono border border-gray-800">
+                        100.92.45.12
+                      </code>
+                      <button className="w-10 h-5 rounded-full bg-green-500 relative transition-colors">
+                        <div className="absolute top-1 w-3 h-3 rounded-full bg-white transition-all left-6" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="h-px bg-gray-800 w-full" />
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="font-medium text-gray-200 text-sm">Local IP Address</div>
+                      <div className="text-xs text-gray-500 mt-1">Ethernet (eth0)</div>
+                    </div>
+                    <code className="text-xs bg-gray-950 px-2 py-1 rounded text-gray-300 font-mono border border-gray-800">
+                      192.168.1.150
+                    </code>
+                  </div>
+                </div>
+              </div>
+
+              {/* Backup & Security */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div className="p-4 border-b border-gray-800 bg-gray-900/50">
+                  <h3 className="font-medium text-gray-100 flex items-center gap-2">
+                    <span className="text-amber-400">🛡️</span>
+                    Backup & Maintenance
+                  </h3>
+                </div>
+                <div className="p-4 flex gap-4">
+                  <button className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium rounded-lg text-gray-200 transition-colors flex items-center gap-2 border border-gray-700">
+                    💾 Export Database
+                  </button>
+                  <button className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium rounded-lg text-gray-200 transition-colors flex items-center gap-2 border border-gray-700">
+                    📜 Backup Scripts
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* OTHER TABS */}
-          {activeNav !== 'home' && activeNav !== 'energy' && activeNav !== 'automations' && activeNav !== 'api' && (
+          {activeNav !== 'home' && activeNav !== 'energy' && activeNav !== 'automations' && activeNav !== 'api' && activeNav !== 'settings' && (
             <div className="flex h-full items-center justify-center text-gray-600 font-mono text-sm">
               [ {navItems.find((n) => n.id === activeNav)?.label} — coming soon ]
             </div>
