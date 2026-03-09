@@ -1,10 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import mqtt from 'mqtt';
+import Docker from 'dockerode';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Initialize Docker instance
+const docker = new Docker({ socketPath: process.platform === 'win32' ? '//./pipe/docker_engine' : '/var/run/docker.sock' });
 
 // Mock Data (will be replaced by DB later)
 let devices = {
@@ -24,6 +28,38 @@ let devices = {
 };
 
 // --- REST API ROUTES ---
+
+// System & Docker Status
+app.get('/api/system/status', async (req, res) => {
+  try {
+    const containers = await docker.listContainers({ all: true });
+    
+    const getContainerInfo = (imageName: string) => {
+      const container = containers.find(c => c.Image.includes(imageName));
+      if (!container) return { status: 'offline', uptime: '-', state: 'Not Found' };
+      
+      return {
+        status: container.State === 'running' ? 'running' : 'offline',
+        uptime: container.Status, // e.g. "Up 4 days"
+        state: container.State
+      };
+    };
+
+    const mqttInfo = getContainerInfo('eclipse-mosquitto');
+    const dbInfo = getContainerInfo('postgres');
+    const influxInfo = getContainerInfo('influxdb');
+
+    res.json([
+      { name: 'Smart Hub Backend', status: 'running', uptime: `Up ${Math.floor(process.uptime() / 60)} minutes`, port: '3001' },
+      { name: 'Mosquitto MQTT', status: mqttInfo.status, uptime: mqttInfo.uptime, port: '1883' },
+      { name: 'InfluxDB', status: influxInfo.status, uptime: influxInfo.uptime, port: '8086' },
+      { name: 'PostgreSQL', status: dbInfo.status, uptime: dbInfo.uptime, port: '5432' }
+    ]);
+  } catch (error) {
+    console.error('Docker info fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch Docker status. Make sure Docker Desktop is running.' });
+  }
+});
 
 // API Status
 app.get('/api/status', (req, res) => {

@@ -78,6 +78,14 @@ export default function Dashboard() {
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [apiOnline, setApiOnline] = useState(false);
   
+  // Settings Tab State
+  const [systemServices, setSystemServices] = useState([
+    { name: 'Smart Hub Backend', status: 'loading', uptime: '-', port: '3001' },
+    { name: 'Mosquitto MQTT', status: 'loading', uptime: '-', port: '1883' },
+    { name: 'InfluxDB', status: 'loading', uptime: '-', port: '8086' },
+    { name: 'PostgreSQL', status: 'loading', uptime: '-', port: '5432' }
+  ]);
+  
   // API Tab State
   const [apiResponse, setApiResponse] = useState<string>('// Избери endpoint и натисни "Test", за да видиш отговора тук...');
 
@@ -93,6 +101,16 @@ export default function Dashboard() {
         console.error('Failed to fetch devices:', err);
         setApiOnline(false);
       });
+
+    // Fetch System Status for Settings Tab
+    fetch('http://localhost:3001/api/system/status')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) {
+          setSystemServices(data);
+        }
+      })
+      .catch(err => console.error('Failed to fetch system status:', err));
 
     // Setup SSE connection
     const eventSource = new EventSource('http://localhost:3001/api/events');
@@ -429,19 +447,20 @@ export default function Dashboard() {
                   </h3>
                 </div>
                 <div className="p-4 divide-y divide-gray-800">
-                  {[
-                    { name: 'Smart Hub Backend', status: 'running', uptime: '4 days', port: '3001' },
-                    { name: 'Mosquitto MQTT', status: 'running', uptime: '4 days', port: '1883' },
-                    { name: 'InfluxDB', status: 'running', uptime: '4 days', port: '8086' },
-                    { name: 'PostgreSQL', status: 'running', uptime: '4 days', port: '5432' }
-                  ].map(service => (
+                  {systemServices.map(service => (
                     <div key={service.name} className="py-3 first:pt-0 last:pb-0 flex justify-between items-center">
                       <div>
                         <div className="font-medium text-gray-200 text-sm">{service.name}</div>
                         <div className="text-xs text-gray-500 mt-1">Port: {service.port} • Uptime: {service.uptime}</div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded border border-green-400/20">
+                        <span className={`text-xs px-2 py-1 rounded border ${
+                          service.status === 'running' 
+                            ? 'text-green-400 bg-green-400/10 border-green-400/20'
+                            : service.status === 'loading'
+                            ? 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
+                            : 'text-red-400 bg-red-400/10 border-red-400/20'
+                        }`}>
                           {service.status}
                         </span>
                       </div>
