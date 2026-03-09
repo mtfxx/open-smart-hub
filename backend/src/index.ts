@@ -30,6 +30,29 @@ app.get('/api/status', (req, res) => {
   res.json({ status: 'online', message: 'Smart Home Hub API is running!' });
 });
 
+// --- SSE (Server-Sent Events) ---
+let clients: express.Response[] = [];
+
+app.get('/api/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  
+  // Add this client
+  clients.push(res);
+  
+  req.on('close', () => {
+    clients = clients.filter(client => client !== res);
+  });
+});
+
+// Function to notify all frontend clients
+function broadcastUpdate() {
+  clients.forEach(client => {
+    client.write(`data: ${JSON.stringify({ type: 'UPDATE_DEVICES', devices })}\n\n`);
+  });
+}
+
 // Get all devices
 app.get('/api/devices', (req, res) => {
   res.json(devices);
@@ -52,6 +75,10 @@ app.post('/api/devices/:roomId/:id/toggle', (req, res) => {
       }
       return d;
     });
+    
+    // Notify all connected frontend clients about the change
+    broadcastUpdate();
+    
     // Return the updated full state
     res.json({ success: true, devices });
   } else {

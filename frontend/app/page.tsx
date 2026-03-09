@@ -82,6 +82,7 @@ export default function Dashboard() {
   const [apiResponse, setApiResponse] = useState<string>('// Избери endpoint и натисни "Test", за да видиш отговора тук...');
 
   useEffect(() => {
+    // Initial fetch
     fetch('http://localhost:3001/api/devices')
       .then(res => res.json())
       .then(data => {
@@ -92,6 +93,26 @@ export default function Dashboard() {
         console.error('Failed to fetch devices:', err);
         setApiOnline(false);
       });
+
+    // Setup SSE connection
+    const eventSource = new EventSource('http://localhost:3001/api/events');
+    
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'UPDATE_DEVICES') {
+        setDevices(data.devices);
+      }
+    };
+
+    eventSource.onerror = () => {
+      setApiOnline(false);
+      eventSource.close();
+      // Optionally try to reconnect here
+    };
+
+    return () => {
+      eventSource.close();
+    };
   }, []);
 
   const toggleDevice = async (room: string, id: number) => {
