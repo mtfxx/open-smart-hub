@@ -90,6 +90,18 @@ export default function Dashboard() {
   const [apiResponse, setApiResponse] = useState<string>('// Избери endpoint и натисни "Test", за да видиш отговора тук...');
 
   useEffect(() => {
+    // Fetch system status periodically
+    const fetchSystemStatus = () => {
+      fetch('http://localhost:3001/api/system/status')
+        .then(res => res.json())
+        .then(data => {
+          if (!data.error) {
+            setSystemServices(data);
+          }
+        })
+        .catch(err => console.error('Failed to fetch system status:', err));
+    };
+
     // Initial fetch
     fetch('http://localhost:3001/api/devices')
       .then(res => res.json())
@@ -102,15 +114,9 @@ export default function Dashboard() {
         setApiOnline(false);
       });
 
-    // Fetch System Status for Settings Tab
-    fetch('http://localhost:3001/api/system/status')
-      .then(res => res.json())
-      .then(data => {
-        if (!data.error) {
-          setSystemServices(data);
-        }
-      })
-      .catch(err => console.error('Failed to fetch system status:', err));
+    // Fetch System Status for Settings Tab initially and then every 3 seconds
+    fetchSystemStatus();
+    const statusInterval = setInterval(fetchSystemStatus, 3000);
 
     // Setup SSE connection
     const eventSource = new EventSource('http://localhost:3001/api/events');
@@ -130,6 +136,7 @@ export default function Dashboard() {
 
     return () => {
       eventSource.close();
+      clearInterval(statusInterval);
     };
   }, []);
 
