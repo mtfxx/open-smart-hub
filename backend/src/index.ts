@@ -5,6 +5,7 @@ import Docker from 'dockerode';
 import { db } from './db';
 import { rooms, devices } from './db/schema';
 import { eq } from 'drizzle-orm';
+import { recordPowerMetrics } from './db/influx';
 
 const app = express();
 app.use(cors());
@@ -121,6 +122,9 @@ app.post('/api/devices/:roomId/:id/toggle', async (req, res) => {
       .set({ state: newState, power: newPower })
       .where(eq(devices.id, id));
     
+    // Record power change in InfluxDB
+    recordPowerMetrics(device.id, device.name, newPower);
+    
     // Notify all connected frontend clients about the change
     await broadcastUpdate();
     
@@ -135,16 +139,28 @@ app.post('/api/devices/:roomId/:id/toggle', async (req, res) => {
 
 // --- MQTT CLIENT ---
 // Connecting to the Mosquitto broker in Docker!
-const mqttClient = mqtt.connect('mqtt://localhost:1883');
+const mqttClient = mqtt.connect('mqtt://127.0.0.1:1883');
 
 mqttClient.on('connect', () => {
-  console.log('📦 Connected to local MQTT broker (Docker)');
+  console.log('📦 Connected to local MQTT broker');
   mqttClient.subscribe('zigbee2mqtt/#');
 });
 
-mqttClient.on('message', (topic, message) => {
-  // We will process real Zigbee messages here later
-  // console.log(`Received message on ${topic}:`, message.toString());
+mqttClient.on('message', async (topic, message) => {
+  try {
+    const payload = JSON.parse(message.toString());
+    
+    // Example: zigbee2mqtt/контакт_тв
+    // Expecting payload: { "state": "ON", "power": 45, "linkquality": 80 }
+    
+    if (payload.power !== undefined) {
+      console.log(`[MQTT] Received power metric on ${topic}: ${payload.power}W`);
+      // Here we would normally look up the device by topic name and save to InfluxDB
+      // For now, we just log it.
+    }
+  } catch (e) {
+    // Ignore non-JSON messages
+  }
 });
 
 const PORT = 3001;
