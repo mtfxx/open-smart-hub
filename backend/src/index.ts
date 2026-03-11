@@ -39,7 +39,7 @@ app.get('/api/system/status', async (req, res) => {
       { name: 'Smart Hub Backend', status: 'running', uptime: `Up ${Math.floor(process.uptime() / 60)} minutes`, port: '3001' },
       { name: 'Mosquitto MQTT', status: mqttInfo.status, uptime: mqttInfo.uptime, port: '1883' },
       { name: 'InfluxDB', status: influxInfo.status, uptime: influxInfo.uptime, port: '8086' },
-      { name: 'PostgreSQL', status: dbInfo.status, uptime: dbInfo.uptime, port: '5432' }
+      { name: 'PostgreSQL', status: dbInfo.status, uptime: dbInfo.uptime, port: '5433' }
     ]);
   } catch (error) {
     console.error('Docker info fetch error:', error);
