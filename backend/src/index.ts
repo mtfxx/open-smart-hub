@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import mqtt from 'mqtt';
 import Docker from 'dockerode';
+import { db } from './db';
+import { rooms, devices } from './db/schema';
+import { eq } from 'drizzle-orm';
 
 const app = express();
 app.use(cors());
@@ -9,23 +12,6 @@ app.use(express.json());
 
 // Initialize Docker instance
 const docker = new Docker({ socketPath: process.platform === 'win32' ? '//./pipe/docker_engine' : '/var/run/docker.sock' });
-
-// Mock Data (will be replaced by DB later)
-let devices = {
-  'Хол': [
-    { id: 1, name: 'Лампа хол', type: 'light', state: true, power: 12 },
-    { id: 2, name: 'Контакт TV', type: 'plug', state: true, power: 87 },
-    { id: 3, name: 'Лампа ъгъл', type: 'light', state: false, power: 0 },
-  ],
-  'Спалня': [
-    { id: 4, name: 'Лампа спалня', type: 'light', state: false, power: 0 },
-    { id: 5, name: 'Контакт зарядно', type: 'plug', state: true, power: 18 },
-  ],
-  'Кухня': [
-    { id: 6, name: 'Лампа кухня', type: 'light', state: true, power: 9 },
-    { id: 7, name: 'Контакт кафемашина', type: 'plug', state: false, power: 0 },
-  ],
-};
 
 // --- REST API ROUTES ---
 
@@ -83,42 +69,67 @@ app.get('/api/events', (req, res) => {
 });
 
 // Function to notify all frontend clients
-function broadcastUpdate() {
+async function broadcastUpdate() {
+  const allDevices = await getAllDevicesGrouped();
   clients.forEach(client => {
-    client.write(`data: ${JSON.stringify({ type: 'UPDATE_DEVICES', devices })}\n\n`);
+    client.write(`data: ${JSON.stringify({ type: 'UPDATE_DEVICES', devices: allDevices })}\n\n`);
   });
 }
 
+// Helper to group devices by room for the frontend
+async function getAllDevicesGrouped() {
+  const allRooms = await db.select().from(rooms);
+  const allDevices = await db.select().from(devices);
+  
+  const grouped: Record<string, any[]> = {};
+  
+  for (const room of allRooms) {
+    grouped[room.name] = allDevices.filter(d => d.roomId === room.id);
+  }
+  
+  return grouped;
+}
+
 // Get all devices
-app.get('/api/devices', (req, res) => {
-  res.json(devices);
+app.get('/api/devices', async (req, res) => {
+  try {
+    const grouped = await getAllDevicesGrouped();
+    res.json(grouped);
+  } catch (error) {
+    console.error('Error fetching devices:', error);
+    res.status(500).json({ error: 'Failed to fetch devices' });
+  }
 });
 
 // Toggle a device
-app.post('/api/devices/:roomId/:id/toggle', (req, res) => {
-  const roomId = req.params.roomId;
+app.post('/api/devices/:roomId/:id/toggle', async (req, res) => {
+  const roomIdStr = req.params.roomId; // This is the room name from frontend
   const id = parseInt(req.params.id);
   
-  if (devices[roomId as keyof typeof devices]) {
-    devices[roomId as keyof typeof devices] = devices[roomId as keyof typeof devices].map((d) => {
-      if (d.id === id) {
-        const newState = !d.state;
-        return { 
-          ...d, 
-          state: newState, 
-          power: newState ? (d.type === 'light' ? 12 : 45) : 0 
-        };
-      }
-      return d;
-    });
+  try {
+    // Find device
+    const [device] = await db.select().from(devices).where(eq(devices.id, id));
+    if (!device) {
+      return res.status(404).json({ error: 'Device not found' });
+    }
+    
+    const newState = !device.state;
+    const newPower = newState ? (device.type === 'light' ? 12 : 45) : 0;
+    
+    // Update device
+    await db.update(devices)
+      .set({ state: newState, power: newPower })
+      .where(eq(devices.id, id));
     
     // Notify all connected frontend clients about the change
-    broadcastUpdate();
+    await broadcastUpdate();
     
     // Return the updated full state
-    res.json({ success: true, devices });
-  } else {
-    res.status(404).json({ error: 'Room not found' });
+    const grouped = await getAllDevicesGrouped();
+    res.json({ success: true, devices: grouped });
+  } catch (error) {
+    console.error('Error toggling device:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
